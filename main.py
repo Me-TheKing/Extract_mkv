@@ -1,5 +1,6 @@
 import sys
 import os
+import subprocess
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QFileInfo
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
@@ -66,13 +67,12 @@ class MyApp(QtWidgets.QWidget):
                         filenames.append(f"{cwdpath}/{f_name}")
 
                 self.tree_lst_preview_mth(filenames)
-       # else:
-            # if the user cancel the select dialog I have to asign False
-            # or the fileNames will be undefined and the program will crash
-            # filenames = False
 
     def tree_lst_preview_mth(self, filenames):
+        cmd = f'{self.mkvmerge_path} -i "{filenames[0]}"'
+        mkv_info = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
         print(filenames)
+        print(mkv_info.stdout.readlines())
 
 
 if __name__ == "__main__":
