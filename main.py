@@ -2,7 +2,7 @@ import sys
 import os
 import subprocess
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import QFileInfo
+from PyQt5.QtCore import QFileInfo, QThread, pyqtSignal
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 
 from UI.maingui import Ui_Form
@@ -19,6 +19,34 @@ def msgbox_dailog_func(msginfo_lst):
     msg.exec_()
 
 
+class RunMkvmergeThread(QThread):
+    """
+    Runs a mux thread and output the result in realtime.
+    """
+    output_changed = pyqtSignal(str)
+    signal_filenames = list()
+    cmd_sgnl = str()
+    finished = pyqtSignal(list)
+
+    mkvmerge_path = "C:\\Program Files\\MKVToolNix\\mkvmerge.exe"
+
+    def run(self):
+        for file in self.signal_filenames:
+            if self.cmd_sgnl == "mkv info":
+                cmd = f'{self.mkvmerge_path} -i "{file}"'
+
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+
+            while True:
+                output = process.stdout.readline()
+                if output == '' and process.poll() is not None:
+                    break
+                if output:
+                    self.output_changed.emit(output.strip())
+
+        self.finished.emit(self.signal_filenames)
+
+
 class MyApp(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
@@ -27,7 +55,7 @@ class MyApp(QtWidgets.QWidget):
 
         # set some var
         self.tmp_path = ""
-        self.mkvmerge_path = "C:\\Program Files\\MKVToolNix\\mkvmerge.exe"
+        # self.mkvmerge_path = "C:\\Program Files\\MKVToolNix\\mkvmerge.exe"
 
         self.btn_handler_mth()
 
@@ -36,10 +64,10 @@ class MyApp(QtWidgets.QWidget):
         self.ui.adddir_btn.clicked.connect(self.adddir_mth)
 
     def addfile_mth(self):
-        # TODO: fix why i can't see the (mk Files) option??
-        filenames, _ = QFileDialog.getOpenFileNames(self, "Get File(s)", self.tmp_path, "mk Files (*.mkv, *.mks, *.mka);; All Files (*)")
+        # TODO: add more extintions video
+        filenames, _ = QFileDialog.getOpenFileNames(self, "Get File(s)", self.tmp_path, "Video Files (*.mkv *.mp4 *.ts *.avi);; mk Files (*.mkv *mka *.mks)")
         if filenames:
-            self.tree_lst_preview_mth(filenames)
+            self.read_file_track_mth(filenames)
 
     def adddir_mth(self):
         folder_name = QFileDialog.getExistingDirectory(self, "Select Folder", self.tmp_path)
@@ -54,10 +82,6 @@ class MyApp(QtWidgets.QWidget):
                                "The Folder is Empty!!",
                                "No File Or Folder will be added."]
                 msgbox_dailog_func(msginfo_lst)
-
-                # if the user cancel the select dialog I have to asign False
-                # or the fileNames will be undefined and the program will crash
-                # filenames = False
             else:
                 # make the name(s) in fileNames list look the same as the format from the getOpenFileNames
                 cwdpath = my_current_dir.replace("\\", "/")
@@ -66,13 +90,23 @@ class MyApp(QtWidgets.QWidget):
                     if QFileInfo(f_name).suffix().lower() == "mkv":
                         filenames.append(f"{cwdpath}/{f_name}")
 
-                self.tree_lst_preview_mth(filenames)
+                # if filenames is not empty then we call the read_file_track_mth
+                if len(filenames):
+                    self.read_file_track_mth(filenames)
 
-    def tree_lst_preview_mth(self, filenames):
-        cmd = f'{self.mkvmerge_path} -i "{filenames[0]}"'
-        mkv_info = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+    def read_file_track_mth(self, filenames):
+        self.info_cmd = RunMkvmergeThread()
+        self.info_cmd.cmd_sgnl = "mkv info"
+        self.info_cmd.signal_filenames = filenames
+        self.info_cmd.output_changed.connect(self.on_output_changed_mth)
+        self.info_cmd.finished.connect(self.complete_dialog_mth)
+        self.info_cmd.start()
+
+    def on_output_changed_mth(self, output):
+        print(output)
+
+    def complete_dialog_mth(self, filenames):
         print(filenames)
-        print(mkv_info.stdout.readlines())
 
 
 if __name__ == "__main__":
